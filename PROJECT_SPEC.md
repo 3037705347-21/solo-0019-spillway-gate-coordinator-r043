@@ -14,7 +14,8 @@
 
 - `gate`：闸门及其当前开度、运行状态、最大开度和活动命令。
 - `gate_command`：一次开度调整申请，包含目标开度、申请原因、状态和执行令牌。
-- `interlock_decision`：安全复核结论，状态为 clear 或 blocked。
+- `interlock_decision`：安全复核结论，状态为 clear 或 blocked；结论上固化当时生效规则版本的不可变依据快照（rule basis）。
+- `interlock_rule_set`：联锁规则的一个已发布版本，拥有严格单调的生效边界、版本号和内容哈希。规则链只追加、不回写。
 
 ## 业务流程
 
@@ -28,7 +29,17 @@
 
 ### review-safety-interlock
 
-安全复核员通过 `POST /commands/{id}/interlock` 提交复核结论。clear 结论会原子占用闸门并签发一次执行令牌；blocked 结论会把命令置为 rejected。其他命令先占用同一闸门时，当前 clear 结论返回冲突且不改变闸门。
+安全复核员通过 `POST /commands/{id}/interlock` 提交复核结论。复核在同一临界区内解析当前有效规则版本：clear 结论必须同时满足当时可读且生效的规则（例如汛期最大允许开度），满足时原子占用闸门并签发一次执行令牌；blocked 结论会把命令置为 rejected。其他命令先占用同一闸门时，当前 clear 结论返回冲突且不改变闸门。
+
+当 clear 结论违反当前规则时，复核返回 `interlock_clear_forbidden_by_rules` 冲突，命令保持 pending，不写入结论、令牌或闸门占用——因此同一条待处理命令在规则修订前后重新提交都能得到稳定且可解释的结果。通过或驳回的结论都会把当时生效的规则版本快照（版本号、规则标识、生效边界、内容哈希）固化在 `interlock.basis` 上，后续规则修订不会回写这一依据。
+
+### publish-interlock-rules
+
+安全管理员通过 `POST /rule-sets` 发布新版本联锁规则。新版本必须携带严格晚于当前最新边界的生效时间（缺省为当前时刻），版本号由服务按链连续分配，标识由服务生成，内容哈希覆盖边界与规则体。新版本只追加：不能回插过去边界、不能替换旧版本、也不影响已经形成的占用、终态或历史结论。
+
+### resolve-effective-rules
+
+通过 `GET /rule-sets` 读取完整版本链（含每个版本的 `effective_to` 上界和当前 `active` 标记），通过 `GET /rule-sets/effective?at=<RFC3339>` 解析任一时刻有效且可读的版本，通过 `GET /rule-sets/{id}` 按标识读取单个版本。
 
 ### execute-gate-command
 
@@ -44,6 +55,10 @@
 - blocked 复核使命令 rejected，不会占用闸门。
 - 模拟故障会令命令 aborted、闸门 faulted，并保留最终开度。
 - 已完成或已中止的命令不能再次执行。
+- 联锁规则版本链只追加：基线版本在零时刻生效，后续版本的生效边界必须严格晚于上一版本，不能回插、不能覆盖。
+- 复核在仓库写锁内解析当时有效的规则版本并把依据快照固化到结论；规则版本只在复核时刻读取一次，修订发布与复核不会互相交错。
+- clear 结论必须满足当时规则版本的开度上限；违反时命令保持 pending，不产生任何写入，复核可在修订后安全重试。
+- 规则修订不回写既有占用、终态命令或历史结论的依据快照。
 
 ## 模块边界
 
@@ -64,6 +79,10 @@
 - `GET /commands/{id}`
 - `POST /commands/{id}/interlock`
 - `POST /commands/{id}/execute`
+- `POST /rule-sets`
+- `GET /rule-sets`
+- `GET /rule-sets/effective?at=<RFC3339>`
+- `GET /rule-sets/{id}`
 
 错误响应统一为：
 
@@ -73,4 +92,4 @@
 
 ## 验证计划
 
-本初始化基线刻意不生成单元测试、夹具或浏览器测试文件，也不声明 `test_command`。后续任务阶段负责补充测试，并在该阶段建立红绿验证。当前每条工作流通过 `cmd/workflowcheck` 启动真实 HTTP 服务并调用公开接口，校验成功状态、持久化结果和关键失败分支。
+每条工作流通过 `cmd/workflowcheck` 启动真实 HTTP 服务并调用公开接口，校验成功状态、持久化结果和关键失败分支。`interlock-rule-versioning` 工作流验证基线种子、版本发布与未来边界、按时刻解析有效版本、clear 违规不写入、blocked 依据固化、历史结论不被回写、以及回插边界被稳定拒绝。单元测试覆盖规则版本不变量、仓库边界解析和服务层发布校验。

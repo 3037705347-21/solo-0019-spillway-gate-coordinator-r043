@@ -11,6 +11,13 @@ func formatTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
 }
 
+func formatBoundary(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return formatTime(value)
+}
+
 func gateView(gate domain.Gate) contracts.GateView {
 	return contracts.GateView{
 		ID:              gate.ID,
@@ -21,6 +28,34 @@ func gateView(gate domain.Gate) contracts.GateView {
 		ActiveCommandID: gate.ActiveCommandID,
 		UpdatedAt:       formatTime(gate.UpdatedAt),
 		Version:         gate.Version,
+	}
+}
+
+func ruleBasisView(basis domain.RuleBasis) contracts.RuleBasisView {
+	return contracts.RuleBasisView{
+		RuleSetID:          basis.RuleSetID,
+		Revision:           basis.Revision,
+		Season:             basis.Season,
+		Note:               basis.Note,
+		EffectiveFrom:      formatBoundary(basis.EffectiveFrom),
+		MaxAllowedAperture: basis.MaxAllowedAperture,
+		ContentHash:        basis.ContentHash,
+	}
+}
+
+func ruleSetView(ruleSet domain.RuleSet, effectiveTo time.Time, active bool) contracts.RuleSetView {
+	return contracts.RuleSetView{
+		RuleSetID:          ruleSet.RuleSetID,
+		Revision:           ruleSet.Revision,
+		Season:             ruleSet.Season,
+		Note:               ruleSet.Note,
+		EffectiveFrom:      formatBoundary(ruleSet.EffectiveFrom),
+		EffectiveTo:        formatBoundary(effectiveTo),
+		MaxAllowedAperture: ruleSet.MaxAllowedAperture,
+		ContentHash:        ruleSet.ContentHash,
+		CreatedAt:          formatTime(ruleSet.CreatedAt),
+		Active:             active,
+		Basis:              ruleBasisView(ruleSet.Basis()),
 	}
 }
 
@@ -49,6 +84,7 @@ func commandView(command domain.GateCommand, includeToken bool) contracts.Comman
 			Verifier:   command.Interlock.Verifier,
 			Note:       command.Interlock.Note,
 			ReviewedAt: formatTime(command.Interlock.ReviewedAt),
+			Basis:      ruleBasisView(command.Interlock.Basis),
 		}
 	}
 	return view

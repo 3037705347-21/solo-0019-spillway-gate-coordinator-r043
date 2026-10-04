@@ -17,6 +17,10 @@ type InterlockDecision struct {
 	Verifier   string
 	Note       string
 	ReviewedAt time.Time
+	// Basis records the rule revision that was readable and in effect when the
+	// review was recorded. It is set at review time and never rewritten by
+	// later rule revisions.
+	Basis RuleBasis
 }
 
 func NewInterlockDecision(verdict, verifier, note string, now time.Time) (InterlockDecision, error) {
@@ -41,6 +45,14 @@ func NewInterlockDecision(verdict, verifier, note string, now time.Time) (Interl
 		Note:       note,
 		ReviewedAt: now.UTC(),
 	}, nil
+}
+
+// WithBasis returns a copy of the decision annotated with the rule revision it
+// was evaluated against.
+func (d InterlockDecision) WithBasis(basis RuleBasis) InterlockDecision {
+	annotated := d
+	annotated.Basis = basis
+	return annotated
 }
 
 func (d InterlockDecision) IsClear() bool {

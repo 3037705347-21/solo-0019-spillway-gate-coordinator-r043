@@ -25,3 +25,12 @@ type ExecuteCommandRequest struct {
 	Token         string `json:"token"`
 	SimulateFault bool   `json:"simulate_fault"`
 }
+
+// PublishRuleSetRequest appends a new interlock rule revision. EffectiveFrom is
+// an optional RFC3339 timestamp; when omitted the revision takes effect now.
+type PublishRuleSetRequest struct {
+	MaxAllowedAperture float64 `json:"max_allowed_aperture"`
+	Season             string  `json:"season"`
+	Note               string  `json:"note"`
+	EffectiveFrom      string  `json:"effective_from"`
+}

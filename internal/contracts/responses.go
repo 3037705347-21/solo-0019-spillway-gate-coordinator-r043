@@ -5,11 +5,38 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
+// RuleBasisView is the immutable rule reference stored on a decision.
+type RuleBasisView struct {
+	RuleSetID          string  `json:"rule_set_id"`
+	Revision           int     `json:"revision"`
+	Season             string  `json:"season"`
+	Note               string  `json:"note"`
+	EffectiveFrom      string  `json:"effective_from"`
+	MaxAllowedAperture float64 `json:"max_allowed_aperture"`
+	ContentHash        string  `json:"content_hash"`
+}
+
+// RuleSetView is one revision with its full effective boundary.
+type RuleSetView struct {
+	RuleSetID          string        `json:"rule_set_id"`
+	Revision           int           `json:"revision"`
+	Season             string        `json:"season"`
+	Note               string        `json:"note"`
+	EffectiveFrom      string        `json:"effective_from"`
+	EffectiveTo        string        `json:"effective_to,omitempty"`
+	MaxAllowedAperture float64       `json:"max_allowed_aperture"`
+	ContentHash        string        `json:"content_hash"`
+	CreatedAt          string        `json:"created_at"`
+	Active             bool          `json:"active"`
+	Basis              RuleBasisView `json:"basis"`
+}
+
 type InterlockDecisionView struct {
-	Verdict    string `json:"verdict"`
-	Verifier   string `json:"verifier"`
-	Note       string `json:"note"`
-	ReviewedAt string `json:"reviewed_at"`
+	Verdict    string        `json:"verdict"`
+	Verifier   string        `json:"verifier"`
+	Note       string        `json:"note"`
+	ReviewedAt string        `json:"reviewed_at"`
+	Basis      RuleBasisView `json:"basis"`
 }
 
 type GateView struct {
@@ -60,4 +87,12 @@ type ReviewCommandResponse struct {
 type ExecuteCommandResponse struct {
 	Command CommandView `json:"command"`
 	Gate    GateView    `json:"gate"`
+}
+
+type RuleSetResponse struct {
+	RuleSet RuleSetView `json:"rule_set"`
+}
+
+type RuleSetListResponse struct {
+	RuleSets []RuleSetView `json:"rule_sets"`
 }

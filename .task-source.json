@@ -33,12 +33,28 @@
       "label": "安全联锁结论",
       "relations": [
         "interlock_decision reviewed_by safety_verifier",
+        "interlock_decision based_on interlock_rule_set",
         "gate_command has_one interlock_decision"
       ],
       "invariants": [
         "每条命令只能写入一次联锁结论",
         "blocked 结论不能占用闸门",
-        "clear 结论必须与闸门占用一起成功"
+        "clear 结论必须与闸门占用一起成功",
+        "结论固化复核时刻有效规则版本的不可变依据快照"
+      ]
+    },
+    {
+      "id": "interlock_rule_set",
+      "label": "联锁规则版本",
+      "relations": [
+        "interlock_rule_set succeeds previous interlock_rule_set",
+        "interlock_decision based_on interlock_rule_set"
+      ],
+      "invariants": [
+        "规则链只追加，版本号连续",
+        "生效边界严格单调向后",
+        "已发布版本不能覆盖或回插",
+        "规则修订不回写既有占用、终态或历史结论"
       ]
     }
   ],
@@ -160,8 +176,13 @@
     },
     {
       "workflow_id": "review-safety-interlock",
-      "description": "clear 复核既包含命令转换也包含闸门占用；并发提交时可能都读到空闲闸门，只有原子占用能保证单一赢家",
-      "observable_failure": "两条命令都被置为 approved，或命令已 approved 但闸门仍显示 idle"
+      "description": "clear 复核既包含命令转换也包含闸门占用；并发提交时可能都读到空闲闸门，只有原子占用能保证单一赢家；复核必须在同一临界区内解析当时有效规则版本并固化依据",
+      "observable_failure": "两条命令都被置为 approved，或命令已 approved 但闸门仍显示 idle，或结论无法说明依据哪一版规则"
+    },
+    {
+      "workflow_id": "interlock-rule-versioning",
+      "description": "复核命令必须始终采用当时有效且可读取的规则版本；规则修订不能回写已经形成的占用、终态或历史结论；待处理命令遇到修订必须有稳定且可解释的结果",
+      "observable_failure": "回插规则改变历史结论，违反当前规则的 clear 被悄悄写入或把命令卡死，或 pending 命令在规则变化后结果不可复现"
     },
     {
       "workflow_id": "execute-gate-command",

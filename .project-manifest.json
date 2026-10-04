@@ -124,6 +124,48 @@
         "storage",
         "contracts"
       ]
+    },
+    {
+      "id": "publish-interlock-rules",
+      "name": "Publish interlock rule revision",
+      "entry": "POST /rule-sets",
+      "steps": [
+        "validate the revision content and effective boundary",
+        "append the revision after the current latest boundary",
+        "expose the chain and resolve the revision effective at any instant"
+      ],
+      "success": "returns a new revision with a consecutive revision number and content hash",
+      "failure": "returns conflict for a retroactive boundary or duplicate id and invalid for malformed content",
+      "verification": "workflowcheck publishes immediate and scheduled revisions, resolves them by boundary, and rejects retroactive insertion",
+      "module_ids": [
+        "entrypoint",
+        "httpapi",
+        "coordination",
+        "domain",
+        "storage",
+        "contracts"
+      ]
+    },
+    {
+      "id": "interlock-rule-versioning",
+      "name": "Review against bounded interlock rule versions",
+      "entry": "POST /commands/{id}/interlock",
+      "steps": [
+        "resolve the rule revision readable and in effect at review time under the repository write lock",
+        "snapshot the resolved rule basis onto the decision",
+        "forbid a clear verdict that violates the resolved revision without writing anything"
+      ],
+      "success": "clear and blocked decisions persist an immutable rule basis; pending commands get a reproducible refusal or a recorded block",
+      "failure": "rule revisions never rewrite occupations, terminal commands, or historical conclusions",
+      "verification": "workflowcheck clears under the baseline, publishes a tighter revision, proves an over-limit clear stays pending and blockable, and executes the historically approved command",
+      "module_ids": [
+        "entrypoint",
+        "httpapi",
+        "coordination",
+        "domain",
+        "storage",
+        "contracts"
+      ]
     }
   ],
   "complexity": {
@@ -131,8 +173,10 @@
       "state_transition",
       "concurrency",
       "resource_lifetime",
-      "error_propagation"
+      "error_propagation",
+      "append_only_versioning",
+      "temporal_rule_resolution"
     ],
-    "notes": "Gate reservation and command transitions are committed under one repository lock; execution tokens are single-command resources and become invalid after a terminal transition."
+    "notes": "Gate reservation and command transitions are committed under one repository lock; execution tokens are single-command resources and become invalid after a terminal transition. Interlock rules form an append-only chain with strictly monotonic effective boundaries; the effective revision is resolved under the review write lock and snapshotted onto each decision, so later revisions never rewrite historical occupations or conclusions."
   }
 }
