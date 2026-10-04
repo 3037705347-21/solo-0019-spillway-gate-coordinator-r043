@@ -12,6 +12,9 @@ type Repository interface {
 	Gate(ctx context.Context, id string) (domain.Gate, error)
 	CreateCommand(ctx context.Context, command domain.GateCommand) error
 	Command(ctx context.Context, id string) (domain.GateCommand, error)
+	PublishRule(ctx context.Context, rule domain.InterlockRule) (domain.InterlockRule, error)
+	Rules(ctx context.Context) ([]domain.InterlockRule, error)
+	RuleEffectiveAt(ctx context.Context, now time.Time) (domain.InterlockRule, error)
 	ReviewCommand(
 		ctx context.Context,
 		commandID string,

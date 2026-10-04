@@ -12,6 +12,7 @@ type MemoryRepository struct {
 	mu       sync.RWMutex
 	gates    map[string]domain.Gate
 	commands map[string]domain.GateCommand
+	rules    []domain.InterlockRule
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -79,6 +80,66 @@ func (m *MemoryRepository) Command(_ context.Context, id string) (domain.GateCom
 	return cloneCommand(command), nil
 }
 
+// PublishRule appends a new rule version and closes the previous effective
+// window in the same critical section. Stored versions are never mutated
+// beyond closing the open window, so historical decisions keep a readable
+// basis. Gates and commands are untouched: a revision cannot rewrite
+// existing reservations, terminal states, or recorded conclusions.
+func (m *MemoryRepository) PublishRule(
+	_ context.Context,
+	rule domain.InterlockRule,
+) (domain.InterlockRule, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(m.rules) > 0 {
+		latest := m.rules[len(m.rules)-1]
+		if err := latest.CloseAt(rule.EffectiveFrom); err != nil {
+			return domain.InterlockRule{}, err
+		}
+		m.rules[len(m.rules)-1] = latest
+	}
+
+	rule.Sequence = int64(len(m.rules)) + 1
+	m.rules = append(m.rules, rule)
+	return rule, nil
+}
+
+func (m *MemoryRepository) Rules(_ context.Context) ([]domain.InterlockRule, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	rules := make([]domain.InterlockRule, len(m.rules))
+	copy(rules, m.rules)
+	return rules, nil
+}
+
+func (m *MemoryRepository) RuleEffectiveAt(
+	_ context.Context,
+	now time.Time,
+) (domain.InterlockRule, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	rule, effective := m.ruleEffectiveAtLocked(now)
+	if !effective {
+		return domain.InterlockRule{}, domain.NotFound(
+			"no_effective_interlock_rule",
+			"no interlock rule is effective at the requested time",
+		)
+	}
+	return rule, nil
+}
+
+func (m *MemoryRepository) ruleEffectiveAtLocked(now time.Time) (domain.InterlockRule, bool) {
+	for i := len(m.rules) - 1; i >= 0; i-- {
+		if m.rules[i].EffectiveAt(now) {
+			return m.rules[i], true
+		}
+	}
+	return domain.InterlockRule{}, false
+}
+
 func (m *MemoryRepository) ReviewCommand(
 	_ context.Context,
 	commandID string,
@@ -98,6 +159,19 @@ func (m *MemoryRepository) ReviewCommand(
 		return domain.GateCommand{}, domain.Gate{}, domain.NotFound("gate_not_found", "gate id was not found")
 	}
 
+	// The review must be based on the rule version effective at review time;
+	// the basis is recorded on the decision so it stays explainable after
+	// later revisions.
+	rule, effective := m.ruleEffectiveAtLocked(now)
+	if !effective {
+		return domain.GateCommand{}, domain.Gate{}, domain.Conflict(
+			"interlock_rule_unavailable",
+			"no interlock rule is effective at review time",
+		)
+	}
+	decision.RuleID = rule.ID
+	decision.RuleSequence = rule.Sequence
+
 	nextCommand := cloneCommand(command)
 	if err := nextCommand.Review(decision, token, now); err != nil {
 		return domain.GateCommand{}, domain.Gate{}, err
@@ -105,6 +179,9 @@ func (m *MemoryRepository) ReviewCommand(
 
 	nextGate := gate
 	if decision.IsClear() {
+		if err := rule.Check(nextCommand); err != nil {
+			return domain.GateCommand{}, domain.Gate{}, err
+		}
 		if err := nextGate.Reserve(nextCommand.ID, now); err != nil {
 			return domain.GateCommand{}, domain.Gate{}, err
 		}

@@ -20,6 +20,14 @@ type ReviewInterlockRequest struct {
 	Note     string `json:"note"`
 }
 
+type PublishInterlockRuleRequest struct {
+	MaxTargetAperture float64 `json:"max_target_aperture"`
+	MaxApertureChange float64 `json:"max_aperture_change"`
+	Reason            string  `json:"reason"`
+	IssuedBy          string  `json:"issued_by"`
+	EffectiveFrom     string  `json:"effective_from"`
+}
+
 type ExecuteCommandRequest struct {
 	Operator      string `json:"operator"`
 	Token         string `json:"token"`

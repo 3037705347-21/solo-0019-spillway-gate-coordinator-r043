@@ -88,6 +88,44 @@ func (h *handler) reviewInterlock(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
+func (h *handler) publishInterlockRule(w http.ResponseWriter, r *http.Request) {
+	var request contracts.PublishInterlockRuleRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeDomainError(w, err)
+		return
+	}
+
+	rule, err := h.service.PublishRule(r.Context(), request)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, contracts.PublishInterlockRuleResponse{Rule: ruleView(rule)})
+}
+
+func (h *handler) listInterlockRules(w http.ResponseWriter, r *http.Request) {
+	rules, err := h.service.Rules(r.Context())
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+
+	views := make([]contracts.InterlockRuleView, len(rules))
+	for i, rule := range rules {
+		views[i] = ruleView(rule)
+	}
+	writeJSON(w, http.StatusOK, contracts.InterlockRulesResponse{Rules: views})
+}
+
+func (h *handler) currentInterlockRule(w http.ResponseWriter, r *http.Request) {
+	rule, err := h.service.CurrentRule(r.Context())
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, contracts.InterlockRuleResponse{Rule: ruleView(rule)})
+}
+
 func (h *handler) executeCommand(w http.ResponseWriter, r *http.Request) {
 	var request contracts.ExecuteCommandRequest
 	if err := decodeJSON(w, r, &request); err != nil {

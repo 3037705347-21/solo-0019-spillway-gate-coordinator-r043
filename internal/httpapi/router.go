@@ -20,6 +20,9 @@ func NewRouter(service *coordination.Service) http.Handler {
 	mux.HandleFunc("GET /commands/{id}", h.command)
 	mux.HandleFunc("POST /commands/{id}/interlock", h.reviewInterlock)
 	mux.HandleFunc("POST /commands/{id}/execute", h.executeCommand)
+	mux.HandleFunc("POST /interlock-rules", h.publishInterlockRule)
+	mux.HandleFunc("GET /interlock-rules", h.listInterlockRules)
+	mux.HandleFunc("GET /interlock-rules/current", h.currentInterlockRule)
 	return recoverMiddleware(mux)
 }
 

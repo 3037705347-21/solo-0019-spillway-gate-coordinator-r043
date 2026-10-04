@@ -45,11 +45,30 @@ func commandView(command domain.GateCommand, includeToken bool) contracts.Comman
 	}
 	if command.Interlock != nil {
 		view.Interlock = &contracts.InterlockDecisionView{
-			Verdict:    string(command.Interlock.Verdict),
-			Verifier:   command.Interlock.Verifier,
-			Note:       command.Interlock.Note,
-			ReviewedAt: formatTime(command.Interlock.ReviewedAt),
+			Verdict:      string(command.Interlock.Verdict),
+			Verifier:     command.Interlock.Verifier,
+			Note:         command.Interlock.Note,
+			RuleID:       command.Interlock.RuleID,
+			RuleSequence: command.Interlock.RuleSequence,
+			ReviewedAt:   formatTime(command.Interlock.ReviewedAt),
 		}
+	}
+	return view
+}
+
+func ruleView(rule domain.InterlockRule) contracts.InterlockRuleView {
+	view := contracts.InterlockRuleView{
+		ID:                rule.ID,
+		Sequence:          rule.Sequence,
+		MaxTargetAperture: rule.MaxTargetAperture,
+		MaxApertureChange: rule.MaxApertureChange,
+		Reason:            rule.Reason,
+		IssuedBy:          rule.IssuedBy,
+		EffectiveFrom:     formatTime(rule.EffectiveFrom),
+		CreatedAt:         formatTime(rule.CreatedAt),
+	}
+	if !rule.EffectiveTo.IsZero() {
+		view.EffectiveTo = formatTime(rule.EffectiveTo)
 	}
 	return view
 }

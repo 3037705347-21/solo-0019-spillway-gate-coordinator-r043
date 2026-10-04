@@ -20,6 +20,9 @@ POST /commands
 GET  /commands/{id}
 POST /commands/{id}/interlock
 POST /commands/{id}/execute
+POST /interlock-rules
+GET  /interlock-rules
+GET  /interlock-rules/current
 ```
 
 登记闸门示例：
@@ -64,6 +67,20 @@ POST /commands/{id}/execute
 }
 ```
 
+发布新规则版本示例（`effective_from` 可省略表示立即生效，也可指定未来时刻预发布）：
+
+```json
+{
+  "max_target_aperture": 1.5,
+  "max_aperture_change": 0,
+  "reason": "汛期水位上涨，收紧最大开度",
+  "issued_by": "safety-wu",
+  "effective_from": "2026-07-01T00:00:00Z"
+}
+```
+
+复核结论中的 `interlock.rule_id` 与 `interlock.rule_sequence` 标明该次复核依据的规则版本；`GET /interlock-rules` 可读取完整版本链及其生效边界。
+
 ## 目录
 
 - `cmd/server`：服务进程。
@@ -82,6 +99,7 @@ go run ./cmd/workflowcheck --workflow register-gate
 go run ./cmd/workflowcheck --workflow request-gate-command
 go run ./cmd/workflowcheck --workflow review-safety-interlock
 go run ./cmd/workflowcheck --workflow execute-gate-command
+go run ./cmd/workflowcheck --workflow publish-interlock-rule
 ```
 
 这些检查会创建临时 HTTP 服务并调用真实路由。它们不调用外部网络，也不依赖数据库。

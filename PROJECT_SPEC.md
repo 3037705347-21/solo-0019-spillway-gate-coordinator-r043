@@ -14,7 +14,8 @@
 
 - `gate`：闸门及其当前开度、运行状态、最大开度和活动命令。
 - `gate_command`：一次开度调整申请，包含目标开度、申请原因、状态和执行令牌。
-- `interlock_decision`：安全复核结论，状态为 clear 或 blocked。
+- `interlock_decision`：安全复核结论，状态为 clear 或 blocked，并记录复核所依据的规则版本。
+- `interlock_rule`：一版不可变的联锁规则，包含季节性开度限制、修订原因和生效边界 `[effective_from, effective_to)`。版本只追加不回写，历史版本始终可读取。
 
 ## 业务流程
 
@@ -28,7 +29,11 @@
 
 ### review-safety-interlock
 
-安全复核员通过 `POST /commands/{id}/interlock` 提交复核结论。clear 结论会原子占用闸门并签发一次执行令牌；blocked 结论会把命令置为 rejected。其他命令先占用同一闸门时，当前 clear 结论返回冲突且不改变闸门。
+安全复核员通过 `POST /commands/{id}/interlock` 提交复核结论。复核在临界区内解析当时生效的规则版本并写入结论；clear 结论违反有效规则时返回稳定冲突，命令保持 pending 且闸门不变。合法的 clear 结论会原子占用闸门并签发一次执行令牌；blocked 结论会把命令置为 rejected。其他命令先占用同一闸门时，当前 clear 结论返回冲突且不改变闸门。
+
+### publish-interlock-rule
+
+安全复核员通过 `POST /interlock-rules` 发布带生效边界的新规则版本。`effective_from` 缺省为当前时刻，可指定未来时刻预发布季节性规则，但不允许过去时刻。发布在同一临界区内封闭上一版本的生效窗口并追加新版本；已形成的闸门占用、终态命令和历史结论都不被回写。`GET /interlock-rules` 返回完整版本链，`GET /interlock-rules/current` 返回当前生效版本。
 
 ### execute-gate-command
 
@@ -40,6 +45,10 @@
 - `gate_command` 状态：pending、approved、rejected、executing、completed、aborted。
 - 只有 pending 命令可以复核。
 - 只有 approved 命令可以执行，且执行令牌必须匹配。
+- 复核始终采用复核时刻生效的规则版本，结论记录 `rule_id` 与 `rule_sequence` 作为依据。
+- clear 结论不得违反有效规则的开度限制；违反时返回 `interlock_rule_violated`，命令保持 pending。
+- 规则修订只追加新版本并封闭上一版生效边界，不回写已形成的占用、终态或历史结论。
+- 待复核命令遇到修订时按复核时刻的有效版本判定，结果稳定且可通过结论中的规则版本解释。
 - clear 复核与闸门占用必须同时成功；任一步失败时两者都不写入。
 - blocked 复核使命令 rejected，不会占用闸门。
 - 模拟故障会令命令 aborted、闸门 faulted，并保留最终开度。
@@ -64,6 +73,9 @@
 - `GET /commands/{id}`
 - `POST /commands/{id}/interlock`
 - `POST /commands/{id}/execute`
+- `POST /interlock-rules`
+- `GET /interlock-rules`
+- `GET /interlock-rules/current`
 
 错误响应统一为：
 

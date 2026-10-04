@@ -13,10 +13,12 @@ const (
 )
 
 type InterlockDecision struct {
-	Verdict    InterlockVerdict
-	Verifier   string
-	Note       string
-	ReviewedAt time.Time
+	Verdict      InterlockVerdict
+	Verifier     string
+	Note         string
+	RuleID       string
+	RuleSequence int64
+	ReviewedAt   time.Time
 }
 
 func NewInterlockDecision(verdict, verifier, note string, now time.Time) (InterlockDecision, error) {
